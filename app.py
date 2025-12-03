@@ -11,6 +11,8 @@ import numpy as np
 # Supabase Configuration
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+print(SUPABASE_URL)
+print(SUPABASE_KEY)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Page Configuration
