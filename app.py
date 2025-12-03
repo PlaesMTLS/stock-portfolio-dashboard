@@ -574,10 +574,6 @@ elif page == "Market Context":
                     st.write(f"[Read Full Article]({news['url']})")
     else:
         st.info("No news available for the selected filters")
-
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.info("ðŸ’¡ **Tip:** Data refreshes every 5 minutes. Use the refresh button in your browser to get the latest updates.")_data.get('sentiment_label', 'neutral')
             
             with st.expander(f"{get_sentiment_color(sentiment_score)} {news['title']}"):
                 st.write(f"**Published:** {news.get('published_date', 'Unknown')}")
@@ -667,10 +663,23 @@ elif page == "News & Sentiment":
                         title='News by Category')
             st.plotly_chart(fig, use_container_width=True)
         
-        # News Feed
+# News Feed
         st.subheader(f"ðŸ“‹ News Feed ({len(news_df)} articles)")
         
         for _, news in news_df.iterrows():
             sentiment_data = news.get('sentiment_analysis', [{}])[0] if news.get('sentiment_analysis') else {}
             sentiment_score = sentiment_data.get('sentiment_score', 0)
-            sentiment_label = sentiment
+            sentiment_label = sentiment_data.get('sentiment_label', 'neutral')
+            
+            with st.expander(f"{get_sentiment_color(sentiment_score)} {news['title']}"):
+                st.write(f"**Published:** {news.get('published_date', 'Unknown')}")
+                st.write(f"**Sentiment:** {sentiment_label.upper()} ({sentiment_score:.2f})")
+                st.write(f"**Summary:** {news.get('summary', 'No summary available')}")
+                if news.get('url'):
+                    st.write(f"[Read More]({news['url']})")
+    else:
+        st.info("No news available for the selected filters")
+		
+# Footer
+st.sidebar.markdown("---")
+st.sidebar.info("ðŸ’¡ **Tip:** Data refreshes every 5 minutes. Use the refresh button in your browser to get the latest updates.")
