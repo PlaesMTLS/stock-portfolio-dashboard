@@ -575,14 +575,14 @@ elif page == "Market Context":
     else:
         st.info("No news available for the selected filters")
 
-        with st.expander(f"{get_sentiment_color(sentiment_score)} {news['title']}"):
-            st.write(f"**Published:** {news.get('published_date', 'Unknown')}")
-            st.write(f"**Sentiment:** {sentiment_label.upper()} ({sentiment_score:.2f})")
-            st.write(f"**Summary:** {news.get('summary', 'No summary available')}")
-            if news.get('url'):
-                st.write(f"[Read More]({news['url']})")
-    else:
-        st.info("No market news available")
+    with st.expander(f"{get_sentiment_color(sentiment_score)} {news['title']}"):
+        st.write(f"**Published:** {news.get('published_date', 'Unknown')}")
+        st.write(f"**Sentiment:** {sentiment_label.upper()} ({sentiment_score:.2f})")
+        st.write(f"**Summary:** {news.get('summary', 'No summary available')}")
+        if news.get('url'):
+            st.write(f"[Read More]({news['url']})")
+        else:
+            st.info("No market news available")
 
 # PAGE 5: NEWS & SENTIMENT HUB
 elif page == "News & Sentiment":
