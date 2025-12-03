@@ -3,7 +3,7 @@ streamlit==1.31.0
 rich==13.9.4
 
 # Supabase + auth stack
-supabase==2.0.0
+supabase==2.3.4
 gotrue==1.0.4
 httpx==0.24.1
 postgrest==0.15.1
