@@ -1,6 +1,8 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+yf.pdr_override()
+import websockets.asyncio
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.express as px
@@ -9,12 +11,12 @@ from supabase import create_client, Client
 import numpy as np
 
 # Supabase Configuration
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+SUPABASE_URL = "https://azkhsqsdwdfjnyuyfoud.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6a2hzcXNkd2Rmam55dXlmb3VkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDc0ODAzOCwiZXhwIjoyMDgwMzI0MDM4fQ.Duuslhr8lg-brWCtLVhiCw2tjwuIGsqJUZzQcBGD2sc"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Page Configuration
-st.set_page_config(page_title="Stock Portfolio Dashboard", layout="wide", page_icon="ðŸ“ˆ")
+st.set_page_config(page_title="Stock Portfolio Dashboard", layout="wide", page_icon="📈")
 
 # Timeframe configurations
 TIMEFRAMES = {
@@ -50,7 +52,7 @@ MARKET_INDICES = {
 }
 
 # Sidebar Navigation
-st.sidebar.title("ðŸ“Š Navigation")
+st.sidebar.title("📊 Navigation")
 page = st.sidebar.radio("Go to", [
     "Portfolio Overview",
     "Stock Deep Dive",
@@ -61,10 +63,11 @@ page = st.sidebar.radio("Go to", [
 
 # Utility Functions
 @st.cache_data(ttl=300)
+
 def get_stock_data(ticker, period, interval):
     """Fetch stock data from yfinance"""
     try:
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=session)
         data = stock.history(period=period, interval=interval)
         return data
     except:
@@ -151,15 +154,34 @@ def create_price_chart(data, ticker, timeframe):
 def get_sentiment_color(score):
     """Return color based on sentiment score"""
     if score > 0.2:
-        return "ðŸŸ¢"
+        return "🟢"
     elif score < -0.2:
-        return "ðŸ”´"
+        return "🔴"
     else:
-        return "ðŸŸ¡"
+        return "🟡"
+
+def get_sentiment_data(news_item):
+    """Safely extract sentiment data from news item"""
+    sentiment_analysis = news_item.get('sentiment_analysis', [])
+    
+    # Handle list format
+    if isinstance(sentiment_analysis, list):
+        if len(sentiment_analysis) > 0:
+            return sentiment_analysis[0]
+        else:
+            return {}
+    
+    # Handle dict format
+    elif isinstance(sentiment_analysis, dict):
+        return sentiment_analysis
+    
+    # Default empty dict
+    else:
+        return {}
 
 # PAGE 1: PORTFOLIO OVERVIEW
 if page == "Portfolio Overview":
-    st.title("ðŸ“ˆ Portfolio Overview")
+    st.title("📈 Portfolio Overview")
     
     # Timeframe Selector
     col1, col2 = st.columns([1, 4])
@@ -225,7 +247,7 @@ if page == "Portfolio Overview":
             st.metric("Number of Holdings", len(holdings))
         
         # Portfolio Performance Table
-        st.subheader("ðŸ“Š Holdings Performance")
+        st.subheader("📊 Holdings Performance")
         perf_df = pd.DataFrame(stock_performances)
         st.dataframe(perf_df, use_container_width=True, hide_index=True)
         
@@ -233,7 +255,7 @@ if page == "Portfolio Overview":
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("ðŸ¥§ Sector Allocation")
+            st.subheader("🥧 Sector Allocation")
             sector_values = {}
             for _, holding in holdings.iterrows():
                 sector = holding.get('sector', 'Unknown')
@@ -250,7 +272,7 @@ if page == "Portfolio Overview":
             st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            st.subheader("ðŸ“ˆ Portfolio Value Chart")
+            st.subheader("📈 Portfolio Value Chart")
             # Aggregate portfolio performance over timeframe
             portfolio_history = None
             for _, holding in holdings.iterrows():
@@ -274,13 +296,13 @@ if page == "Portfolio Overview":
                 st.plotly_chart(fig, use_container_width=True)
         
         # Recent News Feed
-        st.subheader("ðŸ“° Recent News & Sentiment")
+        st.subheader("📰 Recent News & Sentiment")
         days = timeframe_config.get('days', 365)
         news_df = get_news_by_timeframe(days)
         
         if not news_df.empty:
             for _, news in news_df.head(10).iterrows():
-                sentiment_data = news.get('sentiment_analysis', [{}])[0] if news.get('sentiment_analysis') else {}
+                sentiment_data = get_sentiment_data(news)  # ← Changed
                 sentiment_score = sentiment_data.get('sentiment_score', 0)
                 sentiment_label = sentiment_data.get('sentiment_label', 'neutral')
                 
@@ -297,7 +319,7 @@ if page == "Portfolio Overview":
 
 # PAGE 2: STOCK DEEP DIVE
 elif page == "Stock Deep Dive":
-    st.title("ðŸ” Stock Deep Dive")
+    st.title("🔍 Stock Deep Dive")
     
     holdings = get_portfolio_holdings()
     
@@ -308,7 +330,7 @@ elif page == "Stock Deep Dive":
         selected_stock = st.selectbox("Select Stock", holdings['ticker'].tolist())
         
         # Multi-timeframe view
-        st.subheader(f"ðŸ“Š {selected_stock} - Multi-Timeframe Analysis")
+        st.subheader(f"📊 {selected_stock} - Multi-Timeframe Analysis")
         
         tabs = st.tabs(list(TIMEFRAMES.keys()))
         
@@ -353,15 +375,15 @@ elif page == "Stock Deep Dive":
                     st.error(f"Unable to fetch data for {selected_stock}")
         
         # Stock-Specific News
-        st.subheader(f"ðŸ“° News for {selected_stock}")
+        st.subheader(f"📰 News for {selected_stock}")
         news_df = get_news_by_timeframe(30, ticker=selected_stock)
         
         if not news_df.empty:
             for _, news in news_df.iterrows():
-                sentiment_data = news.get('sentiment_analysis', [{}])[0] if news.get('sentiment_analysis') else {}
+                sentiment_data = get_sentiment_data(news)  # ← Changed
                 sentiment_score = sentiment_data.get('sentiment_score', 0)
                 sentiment_label = sentiment_data.get('sentiment_label', 'neutral')
-                
+
                 with st.expander(f"{get_sentiment_color(sentiment_score)} {news['title']}"):
                     st.write(f"**Published:** {news.get('published_date', 'Unknown')}")
                     st.write(f"**Sentiment:** {sentiment_label.upper()} ({sentiment_score:.2f})")
@@ -373,7 +395,7 @@ elif page == "Stock Deep Dive":
 
 # PAGE 3: SECTOR ANALYSIS
 elif page == "Sector Analysis":
-    st.title("ðŸ­ Sector Analysis")
+    st.title("🏭 Sector Analysis")
     
     selected_timeframe = st.selectbox("Timeframe", list(TIMEFRAMES.keys()), index=3)
     timeframe_config = TIMEFRAMES[selected_timeframe]
@@ -392,7 +414,7 @@ elif page == "Sector Analysis":
             }
     
     # Sector Heatmap
-    st.subheader(f"ðŸ”¥ Sector Performance Heatmap - {selected_timeframe}")
+    st.subheader(f"🔥 Sector Performance Heatmap - {selected_timeframe}")
     
     sector_df = pd.DataFrame(sector_performance).T.reset_index()
     sector_df.columns = ['Sector', 'ETF', 'Change %', 'Current Price']
@@ -407,7 +429,7 @@ elif page == "Sector Analysis":
     st.dataframe(sector_df, use_container_width=True, hide_index=True)
     
     # Your Holdings vs Sector
-    st.subheader("ðŸ“Š Your Holdings vs Sector Benchmarks")
+    st.subheader("📊 Your Holdings vs Sector Benchmarks")
     holdings = get_portfolio_holdings()
     
     if not holdings.empty:
@@ -455,7 +477,7 @@ elif page == "Sector Analysis":
             st.dataframe(comp_df, use_container_width=True, hide_index=True)
     
     # Sector News
-    st.subheader("ðŸ“° Sector News")
+    st.subheader("📰 Sector News")
     selected_sector = st.selectbox("Select Sector", list(SECTOR_ETFS.keys()))
     
     news_df = get_news_by_timeframe(timeframe_config.get('days', 365), category='sector')
@@ -463,9 +485,9 @@ elif page == "Sector Analysis":
     if not news_df.empty:
         # Filter by sector (simplified - in practice, you'd tag news with sectors)
         for _, news in news_df.head(10).iterrows():
-            sentiment_data = news.get('sentiment_analysis', [{}])[0] if news.get('sentiment_analysis') else {}
+            sentiment_data = get_sentiment_data(news)  # ← Changed
             sentiment_score = sentiment_data.get('sentiment_score', 0)
-            
+                    
             with st.expander(f"{get_sentiment_color(sentiment_score)} {news['title']}"):
                 st.write(f"**Summary:** {news.get('summary', 'No summary available')}")
                 if news.get('url'):
@@ -473,13 +495,13 @@ elif page == "Sector Analysis":
 
 # PAGE 4: MARKET CONTEXT
 elif page == "Market Context":
-    st.title("ðŸŒ Market Context")
+    st.title("🌍 Market Context")
     
     selected_timeframe = st.selectbox("Timeframe", list(TIMEFRAMES.keys()), index=3)
     timeframe_config = TIMEFRAMES[selected_timeframe]
     
     # Major Indices Performance
-    st.subheader(f"ðŸ“ˆ Major Indices - {selected_timeframe}")
+    st.subheader(f"📈 Major Indices - {selected_timeframe}")
     
     indices_data = {}
     col1, col2, col3, col4 = st.columns(4)
@@ -501,7 +523,7 @@ elif page == "Market Context":
         st.plotly_chart(fig, use_container_width=True)
     
     # Market Breadth Indicators
-    st.subheader("ðŸ“Š Market Breadth")
+    st.subheader("📊 Market Breadth")
     col1, col2 = st.columns(2)
     
     with col1:
@@ -530,14 +552,14 @@ elif page == "Market Context":
             st.metric("S&P 500 Trend", trend, f"Price vs MA50: {((current_price/ma50 - 1) * 100):.2f}%")
     
     # Market-Wide News
-    st.subheader("ðŸ“° Market News & Sentiment")
+    st.subheader("📰 Market News & Sentiment")
     news_df = get_news_by_timeframe(timeframe_config.get('days', 365), category='market')
     
     if not news_df.empty:
         # Aggregate sentiment
         sentiment_scores = []
         for _, news in news_df.iterrows():
-            sentiment_data = news.get('sentiment_analysis', [{}])[0] if news.get('sentiment_analysis') else {}
+            sentiment_data = get_sentiment_data(news) 
             sentiment_score = sentiment_data.get('sentiment_score', 0)
             if sentiment_score != 0:
                 sentiment_scores.append(sentiment_score)
@@ -549,7 +571,7 @@ elif page == "Market Context":
         
         # Display news
         for _, news in news_df.head(15).iterrows():
-            sentiment_data = news.get('sentiment_analysis', [{}])[0] if news.get('sentiment_analysis') else {}
+            sentiment_data = get_sentiment_data(news) 
             sentiment_score = sentiment_data.get('sentiment_score', 0)
             sentiment_label = sentiment_data.get('sentiment_label', 'neutral')
             
@@ -586,7 +608,7 @@ elif page == "Market Context":
 
 # PAGE 5: NEWS & SENTIMENT HUB
 elif page == "News & Sentiment":
-    st.title("ðŸ“° News & Sentiment Hub")
+    st.title("📰 News & Sentiment Hub")
     
     # Filters
     col1, col2, col3 = st.columns(3)
@@ -610,17 +632,17 @@ elif page == "News & Sentiment":
         if sentiment_filter != "All":
             filtered_news = []
             for _, news in news_df.iterrows():
-                sentiment_data = news.get('sentiment_analysis', [{}])[0] if news.get('sentiment_analysis') else {}
+                sentiment_data = get_sentiment_data(news) 
                 sentiment_label = sentiment_data.get('sentiment_label', 'neutral')
                 if sentiment_label == sentiment_filter:
                     filtered_news.append(news)
             news_df = pd.DataFrame(filtered_news)
         
         # Sentiment Trend Over Time
-        st.subheader("ðŸ“ˆ Sentiment Trend")
+        st.subheader("📈 Sentiment Trend")
         sentiment_timeline = []
         for _, news in news_df.iterrows():
-            sentiment_data = news.get('sentiment_analysis', [{}])[0] if news.get('sentiment_analysis') else {}
+            sentiment_data = get_sentiment_data(news) 
             sentiment_score = sentiment_data.get('sentiment_score', 0)
             pub_date = news.get('published_date')
             if pub_date and sentiment_score != 0:
@@ -648,7 +670,7 @@ elif page == "News & Sentiment":
         with col1:
             sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0}
             for _, news in news_df.iterrows():
-                sentiment_data = news.get('sentiment_analysis', [{}])[0] if news.get('sentiment_analysis') else {}
+                sentiment_data = get_sentiment_data(news) 
                 sentiment_label = sentiment_data.get('sentiment_label', 'neutral')
                 sentiment_counts[sentiment_label] += 1
             
@@ -664,10 +686,10 @@ elif page == "News & Sentiment":
             st.plotly_chart(fig, use_container_width=True)
         
 # News Feed
-        st.subheader(f"ðŸ“‹ News Feed ({len(news_df)} articles)")
+        st.subheader(f"📋 News Feed ({len(news_df)} articles)")
         
         for _, news in news_df.iterrows():
-            sentiment_data = news.get('sentiment_analysis', [{}])[0] if news.get('sentiment_analysis') else {}
+            sentiment_data = get_sentiment_data(news) 
             sentiment_score = sentiment_data.get('sentiment_score', 0)
             sentiment_label = sentiment_data.get('sentiment_label', 'neutral')
             
@@ -682,4 +704,4 @@ elif page == "News & Sentiment":
 		
 # Footer
 st.sidebar.markdown("---")
-st.sidebar.info("ðŸ’¡ **Tip:** Data refreshes every 5 minutes. Use the refresh button in your browser to get the latest updates.")
+st.sidebar.info("💡 **Tip:** Data refreshes every 5 minutes. Use the refresh button in your browser to get the latest updates.")
