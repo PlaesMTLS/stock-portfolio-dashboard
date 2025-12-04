@@ -9,6 +9,17 @@ import plotly.express as px
 from datetime import datetime, timedelta
 from supabase import create_client, Client
 import numpy as np
+import requests
+
+# CREATE SESSION HERE (add this block)
+session = requests.Session()
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+})
 
 # Supabase Configuration
 SUPABASE_URL = "https://azkhsqsdwdfjnyuyfoud.supabase.co"
@@ -63,16 +74,52 @@ page = st.sidebar.radio("Go to", [
 
 # Utility Functions
 @st.cache_data(ttl=300)
-
 def get_stock_data(ticker, period, interval):
-    """Fetch stock data from yfinance"""
+    """Fetch stock data from Supabase (populated by n8n)"""
     try:
-        stock = yf.Ticker(ticker, session=session)
-        data = stock.history(period=period, interval=interval)
-        return data
-    except:
+        # Map period to days
+        days_map = {
+            '1d': 1, '5d': 5, '1mo': 30, '3mo': 90, 
+            '6mo': 180, 'ytd': 365, '1y': 365, '5y': 1825
+        }
+        days = days_map.get(period, 90)
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        # Fetch from Supabase
+        response = supabase.table("stock_prices")\
+            .select("*")\
+            .eq("ticker", ticker)\
+            .gte("timestamp", cutoff_date.isoformat())\
+            .order("timestamp", desc=False)\
+            .execute()
+        
+        if not response.data:
+            return pd.DataFrame()
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(response.data)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df.set_index('timestamp', inplace=True)
+        
+        # Rename columns to match yfinance format
+        df = df.rename(columns={
+            'open': 'Open',
+            'high': 'High',
+            'low': 'Low',
+            'close': 'Close',
+            'volume': 'Volume'
+        })
+        
+        # Return only necessary columns
+        cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        available = [c for c in cols if c in df.columns]
+        return df[available] if available else pd.DataFrame()
+        
+    except Exception as e:
+        st.error(f"Error fetching data for {ticker}: {str(e)}")
         return pd.DataFrame()
-
+    
+    
 @st.cache_data(ttl=300)
 def get_portfolio_holdings():
     """Fetch portfolio holdings from Supabase"""
